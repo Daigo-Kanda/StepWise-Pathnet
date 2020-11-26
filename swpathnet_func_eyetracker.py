@@ -4,7 +4,6 @@ import numpy as np
 import tensorflow as tf
 from numpy.random import choice
 from scipy.stats import truncnorm
-from tensorflow import keras
 
 
 # StepWise Pathnet function for EyeTracker
@@ -34,6 +33,8 @@ class sw_pathnet:
         self.len_geopath = 0
         self.initializer_k = truncnorm(-1, 1, loc=0, scale=0.25)
         self.val_b = 0.0
+        # get model for randomized weights
+        random_weights_model = tf.keras.models.clone_model(pre_model)
         for i_layer in range(len(self.tmp_model.layers)):
             # 重みのある層のみの処理
             if self.li_is_weighted[i_layer]:
@@ -43,33 +44,15 @@ class sw_pathnet:
                 # ソースの重みの格納
                 self.source_weights.append(self.tmp_model.layers[i_layer].get_weights())
 
-                # ターゲットの重みの初期値の格納
-                #   学習済みの重みを使うかで分岐
-                #   最終層のみは学習済みの重みを使うかに依らずに生成
-                #   kernel, biasの順（変わらないでくれ頼む）
+                # append target initialized weights
                 if is_reuse_initweight and i_layer != len(self.tmp_model.layers) - 1:
                     # 学習済みの重みを引っ張るだけ
                     self.target_weights.append(self.tmp_model.layers[i_layer].get_weights())
 
                 else:
                     print('layer: ', i_layer)
-                    self.get_init_weight(self.tmp_model.layers[i_layer].get_weights().shape)
-                    tmp_target_weight = []
-                    for weight in self.tmp_model.layers[i_layer].weights:
-                        print('given', weight.shape)
-                        # shapeのlenでbiasかkernelかを判定
-                        tmp_target_weight.append(self.get_init_weight(weight.shape))
-                        # if len(weight.shape) == 1:
-                        #    b_len = weight.shape[0]
-                        #    tmp_target_weight.append(
-                        #        np.array([val_b for i in range(b_len)]))
-                        #    
-                        # else:
-                        #    tmp_target_weight.append(self.get
-                        #        initializer_k.rvs(weight.shape))
-                        print('generated', tmp_target_weight[-1].shape)
+                    self.target_weights.append(random_weights_model.layers[i_layer].get_weights())
 
-                    self.target_weights.append(tmp_target_weight)
             else:
                 # 重みなしレイヤーは空リストを追加
                 self.source_weights.append([])
@@ -97,7 +80,7 @@ class sw_pathnet:
         else:
             weighted = (len(layer.weights) != 0) or (len(layer.weights) != 4) or (len(layer.weights) != 3)
 
-        return not (weighted)
+        return weighted
 
     def gen_li_weighted(self, model):
         li_is_weighted = []
@@ -110,28 +93,11 @@ class sw_pathnet:
         return li_is_weighted
 
     # top-layerだけn_classesに合わせたモデルを生成
-    #   https://stackoverflow.com/questions/49492255/how-to-replace-or-insert-intermediate-layer-in-keras-model より　笹川実装を参考　
     def gen_tmp_model_gaze(self, pre_model):
 
         # clone model and copy weights
         tmp_model = tf.keras.models.clone_model(pre_model)
         tmp_model.set_weights(pre_model.get_weights())
-
-        print(tmp_model.summary())
-
-        return tmp_model
-
-    def gen_tmp_model(self, pre_model):
-        tmp_li_is_weighted = [self.is_weighted(l) for l in pre_model.layers]
-        i_last_weighted = -1 - tmp_li_is_weighted[::-1].index(True)
-        print(i_last_weighted, 'will be replaced to dense with', self.n_classes)
-
-        tmp_li_is_weighted = tmp_li_is_weighted[:i_last_weighted]
-        i_replaced = -1 - tmp_li_is_weighted[::-1].index(True)
-
-        x = pre_model.layers[i_last_weighted - 1].output
-        predictions = keras.layers.Dense(self.n_classes, activation='softmax', name='dense_top')(x)
-        tmp_model = keras.models.Model(inputs=pre_model.input, outputs=predictions)
 
         print(tmp_model.summary())
 
