@@ -11,7 +11,7 @@ from tensorflow import keras
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
 
 import ITrackerData_Person as data_gen
-import swpathnet_func
+import swpathnet_func_eyetracker
 
 
 # tensorflowの糞メモリ確保回避のおまじない
@@ -48,8 +48,8 @@ def main(args):
         pre_model = keras.models.load_model(args.trained_model)
 
     # Step-wise pathnetインスタンスの作成
-    pathnet = swpathnet_func.sw_pathnet(pre_model, args.n_comp, args.num_classes, args.transfer_all,
-                                        is_reuse_initweight=args.finetune)
+    pathnet = swpathnet_func_eyetracker.sw_pathnet(pre_model, args.n_comp, args.num_classes, args.transfer_all,
+                                                   is_reuse_initweight=args.finetune)
 
     # 遺伝子型の生成
     # just list of boolean
