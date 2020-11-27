@@ -123,7 +123,6 @@ class sw_pathnet:
     def gene2model(self, gene):
         # copy pretrained model
         model = self.tmp_model
-        # model.summary()
         model.reset_states()
 
         i_gene = 0

@@ -53,7 +53,8 @@ def main(args):
 
     # 遺伝子型の生成
     # just list of boolean
-    li_geopath = [pathnet.gen_geopath(bias_pretrained=1.0 - x / args.n_geopath) for x in range(args.n_geopath)]
+    # li_geopath = [pathnet.gen_geopath(bias_pretrained=1.0 - x / args.n_geopath) for x in range(args.n_geopath)]
+    li_geopath = [pathnet.gen_geopath(bias_pretrained=0.5) for x in range(args.n_geopath)]
     print(li_geopath)
 
     # optimizerの指定
