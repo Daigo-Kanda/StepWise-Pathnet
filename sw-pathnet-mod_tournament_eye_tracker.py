@@ -55,6 +55,10 @@ def main(args):
     # just list of boolean
     # li_geopath = [pathnet.gen_geopath(bias_pretrained=1.0 - x / args.n_geopath) for x in range(args.n_geopath)]
     li_geopath = [pathnet.gen_geopath(bias_pretrained=0.5) for x in range(args.n_geopath)]
+
+    # for eye tracker
+    pathnet.adjustGeopath(li_geopath)
+
     print(li_geopath)
 
     # optimizerの指定
@@ -185,8 +189,10 @@ def main(args):
         for i in li_i_comp:
             if i != i_win:
                 li_geopath[i] = pathnet.mutate_geopath(np.copy(li_geopath[i_win]))
+        pathnet.adjustGeopath(li_geopath)
 
         # 重みの保存
+        # I think I should delete this code
         for i, i_geopath in enumerate(li_i_comp):
             if i != which_win:
                 pathnet.store_weights(li_geopath[i_geopath], tmp_weights[i])

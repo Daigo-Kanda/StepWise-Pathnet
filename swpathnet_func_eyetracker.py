@@ -181,3 +181,12 @@ class sw_pathnet:
             else:
                 tmp_weights.append([])
         return tmp_weights
+
+    def adjustGeopath(self, lists):
+        check = [3, 4, 5, 15, 16, 17]
+        for list in lists:
+            for num in check:
+                if list[num] == 1:
+                    list[num + 3] = 1
+                else:
+                    list[num + 3] = 0
