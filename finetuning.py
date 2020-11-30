@@ -1,43 +1,33 @@
 import argparse
 import os
-import sys
 
 import tensorflow as tf
-from keras.preprocessing.image import ImageDataGenerator
 from tensorflow import keras
 
-# tensorflowの糞メモリ確保回避のおまじない
-config = tf.ConfigProto(allow_soft_placement=True)
-config.gpu_options.allow_growth = True
-session = tf.Session(config=config)
-keras.backend.set_session(session)
+import ITrackerData_Person as data_gen
+
+tf.debugging.set_log_device_placement(True)
+
+gpus = tf.config.experimental.list_physical_devices('GPU')
+if gpus:
+    # Restrict TensorFlow to only use the first GPU
+    try:
+        tf.config.experimental.set_visible_devices(gpus[0], 'GPU')
+        logical_gpus = tf.config.experimental.list_logical_devices('GPU')
+        print(len(gpus), "Physical GPUs,", len(logical_gpus), "Logical GPU")
+    except RuntimeError as e:
+        # Visible devices must be set before GPUs have been initialized
+        print(e)
 
 
 def main(args):
     # 画像サイズの設定
     image_shape = (args.image_size, args.image_size, 3)
 
-    # 学習済みモデルの読み込み
-    if args.trained_model is None:
-        if args.model_name == 'vgg16':
-            load_pre_model = keras.applications.vgg16.VGG16
-        elif args.model_name == 'xception':
-            load_pre_model = keras.applications.xception.Xception
-        elif args.model_name == 'inceptionv3':
-            load_pre_model = keras.applications.inception_v3.InceptionV3
-        elif args.model_name == 'inceptionresnetv2':
-            load_pre_model = keras.applications.inception_resnet_v2.InceptionResNetV2
-        elif args.model_name == 'densenet':
-            load_pre_model = keras.applications.densenet.DenseNet121
-        elif args.model_name == 'resnet50':
-            load_pre_model = keras.applications.resnet50.ResNet50
-        else:
-            sys.stderr('invalid model_name: ', args.model_name)
-        base_model = load_pre_model(input_shape=image_shape,
-                                    weights='imagenet',
-                                    include_top=False)
-    else:
-        base_model = keras.models.load_model(args.trained_model)
+    base_model = keras.models.load_model(args.trained_model)
+
+    model = tf.keras.models.clone_model(base_model)
+    model.set_weights(base_model.get_weights())
 
     # 重み固定の有無
     if args.fix_pretrained:
@@ -45,87 +35,50 @@ def main(args):
             layer.trainable = False
 
     # top layerをターゲットタスクに合わせる
-    if args.top_layer == 'add':
-        #   https://gist.github.com/didacroyo/839bd1dbb67463df8ba8fb14eb3fde0c より
-        # add a global spatial average pooling layer
-        x = base_model.output
-        x = keras.layers.GlobalAveragePooling2D()(x)
-        # let's add a fully-connected layer
-        x = keras.layers.Dense(1024, activation='relu')(x)
-        # and a logistic layer -- let's say we have 200 classes
-        predictions = keras.layers.Dense(args.num_classes, activation='softmax')(x)
-        model = keras.models.Model(inputs=base_model.input, outputs=predictions)
-    elif args.top_layer == 'replace':
-        x = base_model.output
-        x = keras.layers.GlobalAveragePooling2D()(x)
-        predictions = keras.layers.Dense(args.num_classes, activation='softmax')(x)
-        model = keras.models.Model(inputs=base_model.input, outputs=predictions)
-    else:
-        print('in valid --top_layer: %s' % args.top_layer)
-        return -1
+    # if args.top_layer == 'add':
+    #     #   https://gist.github.com/didacroyo/839bd1dbb67463df8ba8fb14eb3fde0c より
+    #     # add a global spatial average pooling layer
+    #     x = base_model.output
+    #     x = keras.layers.GlobalAveragePooling2D()(x)
+    #     # let's add a fully-connected layer
+    #     x = keras.layers.Dense(1024, activation='relu')(x)
+    #     # and a logistic layer -- let's say we have 200 classes
+    #     predictions = keras.layers.Dense(args.num_classes, activation='softmax')(x)
+    #     model = keras.models.Model(inputs=base_model.input, outputs=predictions)
+    # elif args.top_layer == 'replace':
+    #     x = base_model.output
+    #     x = keras.layers.GlobalAveragePooling2D()(x)
+    #     predictions = keras.layers.Dense(args.num_classes, activation='softmax')(x)
+    #     model = keras.models.Model(inputs=base_model.input, outputs=predictions)
+    # else:
+    #     print('in valid --top_layer: %s' % args.top_layer)
+    #     return -1
 
     print(model.summary())
 
-    # augumentationの設定
-    #   https://github.com/geifmany/cifar-vgg/blob/master/cifar100vgg.pyより拝借
-    if args.dont_augment:
-        train_datagen = ImageDataGenerator(
-            featurewise_center=False,  # set input mean to 0 over the dataset
-            samplewise_center=False,  # set each sample mean to 0
-            featurewise_std_normalization=False,  # divide inputs by std of the dataset
-            samplewise_std_normalization=False,  # divide each input by its std
-            zca_whitening=False,  # apply ZCA whitening
-            rotation_range=15,  # randomly rotate images in the range (degrees, 0 to 180)
-            width_shift_range=0.1,  # randomly shift images horizontally (fraction of total width)
-            height_shift_range=0.1,  # randomly shift images vertically (fraction of total height)
-            horizontal_flip=True,  # randomly flip images
-            vertical_flip=False)  # randomly flip images
-    else:
-        train_datagen = ImageDataGenerator()
-    test_datagen = ImageDataGenerator()
+    # generator setting
+    train_generator = data_gen.ITrackerData(args.dataset_dir, 'train', (args.image_size, args.image_size), (25, 25),
+                                            args.batch_size)
+    test_generator = data_gen.ITrackerData(args.dataset_dir, 'test', (args.image_size, args.image_size), (25, 25),
+                                           args.batch_size)
 
-    # generatorの設定
-    train_generator = train_datagen.flow_from_directory(
-        os.path.join(args.dataset_dir, 'train'),
-        target_size=image_shape[:2],
-        batch_size=args.batch_size,
-        class_mode='categorical')
-    test_generator = test_datagen.flow_from_directory(
-        os.path.join(args.dataset_dir, 'test'),
-        target_size=image_shape[:2],
-        batch_size=args.batch_size,
-        class_mode='categorical')
-
-    # optimizerの指定
-    opt = keras.optimizers.Adam()
-
-    # gpu並列
-    if args.n_gpu != 1:
-        with tf.device('/device:CPU:0'):
-            tmp_model = pathnet.gene2model(li_geopath[i])
-        model = keras.utils.multi_gpu_model(tmp_model,
-                                            gpus=args.n_gpu)
-
-    # コンパイル
-    model.compile(loss='categorical_crossentropy',
-                  optimizer=opt,
-                  metrics=['accuracy'])
+    # compile
+    model.compile(optimizer='adam', loss='mse', metrics=['mae'])
 
     # callbacks
     cbks = [keras.callbacks.CSVLogger(
-        os.path.join(args.save_dir, 'finetuning_%s_%s.csv' % (args.model_name, args.learning_number)))]
+        os.path.join(args.save_dir, 'finetuning_%s_%s.csv' % ("eye_tracker", args.learning_number)))]
 
     # Fit the model on the batches generated by datagen.flow().
     history = model.fit_generator(
-        train_generator,
-        steps_per_epoch=args.num_images_train // args.batch_size,
-        epochs=args.epochs,
+        generator=train_generator,
+        steps_per_epoch=len(train_generator),
+        epochs=100,
+        verbose=1,
         validation_data=test_generator,
-        validation_steps=args.num_images_test // args.batch_size,
-        use_multiprocessing=args.use_multiprocessing,
-        workers=args.n_thread,
+        validation_steps=len(test_generator),
         callbacks=cbks,
-        verbose=2)
+    )
 
     ## save history
     # df_history = pd.DataFrame(history.history)
