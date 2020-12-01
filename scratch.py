@@ -1,20 +1,26 @@
 import argparse
+import datetime
 import os
 import sys
 
-import pandas as pd
 import tensorflow as tf
-from keras.preprocessing.image import ImageDataGenerator
 from tensorflow import keras
 
-# tensorflowの糞メモリ確保回避のおまじない
-config = tf.ConfigProto(allow_soft_placement=True)
-config.gpu_options.allow_growth = True
-session = tf.Session(config=config)
-keras.backend.set_session(session)
+import ITrackerData_Person as data_gen
 
 
 def main(args):
+    gpus = tf.config.experimental.list_physical_devices('GPU')
+    if gpus:
+        # Restrict TensorFlow to only use the first GPU
+        try:
+            tf.config.experimental.set_visible_devices(gpus[0], 'GPU')
+            logical_gpus = tf.config.experimental.list_logical_devices('GPU')
+            print(len(gpus), "Physical GPUs,", len(logical_gpus), "Logical GPU")
+        except RuntimeError as e:
+            # Visible devices must be set before GPUs have been initialized
+            print(e)
+
     # 画像サイズの設定
     image_shape = (args.image_size, args.image_size, 3)
 
@@ -39,76 +45,77 @@ def main(args):
                                classes=args.num_classes,
                                include_top=True)
     else:
-        model = keras.models.load_model(args.trained_model)
+        tmp_model = keras.models.load_model(args.trained_model)
 
-    # augumentationの設定
-    #   https://github.com/geifmany/cifar-vgg/blob/master/cifar100vgg.pyより拝借
-    if args.dont_augment:
-        train_datagen = ImageDataGenerator(
-            featurewise_center=False,  # set input mean to 0 over the dataset
-            samplewise_center=False,  # set each sample mean to 0
-            featurewise_std_normalization=False,  # divide inputs by std of the dataset
-            samplewise_std_normalization=False,  # divide each input by its std
-            zca_whitening=False,  # apply ZCA whitening
-            rotation_range=15,  # randomly rotate images in the range (degrees, 0 to 180)
-            width_shift_range=0.1,  # randomly shift images horizontally (fraction of total width)
-            height_shift_range=0.1,  # randomly shift images vertically (fraction of total height)
-            horizontal_flip=True,  # randomly flip images
-            vertical_flip=False)  # randomly flip images
-    else:
-        train_datagen = ImageDataGenerator()
-    test_datagen = ImageDataGenerator()
+    model = tf.keras.models.clone_model(tmp_model)
 
-    # generatorの設定
-    train_generator = train_datagen.flow_from_directory(
-        os.path.join(args.dataset_dir, 'train'),
-        target_size=image_shape[:2],
-        batch_size=args.batch_size,
-        class_mode='categorical')
-    test_generator = test_datagen.flow_from_directory(
-        os.path.join(args.dataset_dir, 'test'),
-        target_size=image_shape[:2],
-        batch_size=args.batch_size,
-        class_mode='categorical')
+    # # augumentationの設定
+    # #   https://github.com/geifmany/cifar-vgg/blob/master/cifar100vgg.pyより拝借
+    # if args.dont_augment:
+    #     train_datagen = ImageDataGenerator(
+    #         featurewise_center=False,  # set input mean to 0 over the dataset
+    #         samplewise_center=False,  # set each sample mean to 0
+    #         featurewise_std_normalization=False,  # divide inputs by std of the dataset
+    #         samplewise_std_normalization=False,  # divide each input by its std
+    #         zca_whitening=False,  # apply ZCA whitening
+    #         rotation_range=15,  # randomly rotate images in the range (degrees, 0 to 180)
+    #         width_shift_range=0.1,  # randomly shift images horizontally (fraction of total width)
+    #         height_shift_range=0.1,  # randomly shift images vertically (fraction of total height)
+    #         horizontal_flip=True,  # randomly flip images
+    #         vertical_flip=False)  # randomly flip images
+    # else:
+    #     train_datagen = ImageDataGenerator()
+    # test_datagen = ImageDataGenerator()
+    #
+    # # generatorの設定
+    # train_generator = train_datagen.flow_from_directory(
+    #     os.path.join(args.dataset_dir, 'train'),
+    #     target_size=image_shape[:2],
+    #     batch_size=args.batch_size,
+    #     class_mode='categorical')
+    # test_generator = test_datagen.flow_from_directory(
+    #     os.path.join(args.dataset_dir, 'test'),
+    #     target_size=image_shape[:2],
+    #     batch_size=args.batch_size,
+    #     class_mode='categorical')
+
+    # generator setting
+    train_generator = data_gen.ITrackerData(args.dataset_dir, 'train', (args.image_size, args.image_size), (25, 25),
+                                            args.batch_size)
+    test_generator = data_gen.ITrackerData(args.dataset_dir, 'test', (args.image_size, args.image_size), (25, 25),
+                                           args.batch_size)
 
     # optimizerの指定
     opt = keras.optimizers.Adam()
 
-    # gpu並列
-    if args.n_gpu != 1:
-        with tf.device('/device:CPU:0'):
-            tmp_model = pathnet.gene2model(li_geopath[i])
-        model = keras.utils.multi_gpu_model(tmp_model,
-                                            gpus=args.n_gpu)
+    # compile
+    model.compile(optimizer='adam', loss='mse', metrics=['mae'])
 
-    # コンパイル
-    model.compile(loss='categorical_crossentropy',
-                  optimizer=opt,
-                  metrics=['accuracy'])
+    now = datetime.datetime.now()
 
     # callbacks
     cbks = [keras.callbacks.CSVLogger(
-        os.path.join(args.save_dir, 'finetuning_%s_%s.csv' % (args.model_name, args.learning_number)))]
+        os.path.join(args.save_dir, 'scratch_%s_%s.csv' % ("eye_tracking", now.strftime('%Y%m%d_%H%M%S'))))]
 
     # Fit the model on the batches generated by datagen.flow().
     history = model.fit_generator(
-        train_generator,
-        steps_per_epoch=args.num_images_train // args.batch_size,
+        generator=train_generator,
+        steps_per_epoch=len(train_generator),
         epochs=args.epochs,
+        verbose=1,
         validation_data=test_generator,
-        validation_steps=args.num_images_test // args.batch_size,
-        use_multiprocessing=args.use_multiprocessing,
-        workers=args.n_thread,
+        validation_steps=len(test_generator),
         callbacks=cbks,
-        verbose=2)
+    )
+
+    model.save('./model_scratch_{}.hdf5'.format(now.strftime('%Y%m%d_%H%M%S')))
 
     # save history
-    df_history = pd.DataFrame(history.history)
-    df_history.to_csv(os.path.join(args.save_dir, 'scratch_%s_%s.csv' % (args.model_name, args.learning_number)))
+    # df_history = pd.DataFrame(history.history)
+    # df_history.to_csv(os.path.join(args.save_dir, 'scratch_%s_%s.csv' % (args.model_name, args.learning_number)))
 
 
-# 引数の読み込み
-if __name__ == '__main__':
+def getParser():
     parser = argparse.ArgumentParser()
 
     # N回回す実験用のアレ
@@ -160,6 +167,13 @@ if __name__ == '__main__':
     # 使う学習済みモデル
     parser.add_argument('--model_name', default='vgg16',
                         help='name of pre-trained network. this is disable by giving --trained_model')
+    return parser
+
+
+# 引数の読み込み
+if __name__ == '__main__':
+    parser = getParser()
+
     args = parser.parse_args()
 
     print('----PARSED ARGS----\n%s\n-----------------' % args)
