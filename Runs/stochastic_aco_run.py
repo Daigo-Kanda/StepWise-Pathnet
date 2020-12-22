@@ -1,11 +1,10 @@
-import stochastic_transfer_eye_tracker
 import glob
 import os
-import ITrackerData_person_tensor as ds
-import tensorflow as tf
-from tensorflow.python.client import device_lib
 
-import os
+import tensorflow as tf
+
+import ITrackerData_person_tensor as ds
+import stochastic_transfer_eye_tracker
 
 # os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
 
@@ -28,9 +27,9 @@ if gpus:
 # hyper parameter
 # dataset_path = "/kanda_tmp/GazeCapture_pre"
 # kanda
-# dataset_path = "/mnt/data/DataSet/GazeCapture_pre"
+dataset_path = "/mnt/data/DataSet/GazeCapture_pre"
 # matsuura
-dataset_path = "/home/kanda/GazeCapture_pre"
+# dataset_path = "/home/kanda/GazeCapture_pre"
 model_path = "model/models.046-2.46558.hdf5"
 participants_num = 50
 loop_num = 5
@@ -55,7 +54,7 @@ tmp = zip(participants_count, participants_path)
 sorted_tmp = sorted(tmp, reverse=True)
 participants_count, participants_path = zip(*sorted_tmp)
 
-for i in range(participants_num):
+for i in reversed(range(participants_num)):
     for j in range(loop_num):
         # parser = sw_pathnetmod_tournament_eye_tracker.get_parser()
         # sw_pathnetmod_tournament_eye_tracker.main(parser.parse_args(

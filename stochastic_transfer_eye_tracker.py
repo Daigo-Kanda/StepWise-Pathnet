@@ -2,22 +2,19 @@ import argparse
 import copy
 import datetime
 import gc
+import json
 import os
-import sys
 import time
 
 import numpy as np
 import pandas as pd
 import tensorflow as tf
 from tensorflow import keras
-from tensorflow.keras.preprocessing.image import ImageDataGenerator
 from tensorflow.python.keras.callbacks import ModelCheckpoint
 
 import ITrackerData_person_tensor as data_gen
 import swpathnet_func_eyetracker
-import networkx as nx
 from BinaryAntColonyOptimization import BinaryAntColonyOptimization
-import json
 
 
 def print_varsize():
@@ -186,7 +183,7 @@ def main(args):
     model.fit(
         x=train_generator,
         initial_epoch=0,
-        epochs=1,
+        epochs=args.epochs,
         verbose=1,
         validation_data=validation_generator,
         callbacks=cbks,
