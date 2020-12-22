@@ -3,7 +3,7 @@ import glob
 import numpy as np
 import pandas as pd
 
-csv_files = glob.glob("/mnt/data2/StepWise_PathNet/Test/Fine_tuning/*.csv")
+csv_files = glob.glob("/mnt/data2/StepWise_PathNet/Test/Proposed/*.csv")
 
 # mae list
 val_mae_list = []

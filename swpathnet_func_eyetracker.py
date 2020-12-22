@@ -9,10 +9,12 @@ from scipy.stats import truncnorm
 # StepWise Pathnet function for EyeTracker
 class sw_pathnet:
     # コンストラクタ
-    def __init__(self, pre_model, n_comp, n_classes, transfer_all_layer, is_reuse_initweight=False):
+    def __init__(self, pre_model, n_comp, transfer_all_layer, is_reuse_initweight=False):
         print(pre_model.summary())
-        self.n_classes = n_classes
         self.transfer_all_layer = transfer_all_layer
+
+        self.default_model = pre_model
+        self.original_weights = self.default_model.get_weights()
 
         # 学習用のテンプレとして，pre_modelを複製
         #   VRAM上のモデル単位のメモリ解放ができない臭い
@@ -25,6 +27,7 @@ class sw_pathnet:
         check = self.tmp_model.layers
         self.li_is_weighted = [self.is_weighted(l) for l in self.tmp_model.layers]
         print(self.li_is_weighted)
+
 
         # パラメータの保存
         #   学習済みモデルに合わせて作成，重みがある箇所は初期値を置く
@@ -86,9 +89,19 @@ class sw_pathnet:
         li_is_weighted = []
         for i_layer in range(len(model.layers)):
             if self.is_weighted(model.layers[i_layer]):
-                li_is_weighted.append(False)
-            else:
                 li_is_weighted.append(True)
+            else:
+                li_is_weighted.append(False)
+
+        return li_is_weighted
+
+    def gen_li_weighted_with_name(self, model):
+        li_is_weighted = {}
+        for i_layer, layer in enumerate(model.layers):
+            if self.is_weighted(model.layers[i_layer]):
+                li_is_weighted[layer.name] = True
+            else:
+                li_is_weighted[layer.name] = False
 
         return li_is_weighted
 
@@ -141,6 +154,25 @@ class sw_pathnet:
 
                 # geneのイテレータを増やす
                 i_gene += 1
+
+        return model
+
+    # 遺伝子型からmodelへの変換
+    #   0: 学習済みモデルのモジュール
+    #   1: 新しく学習するモジュール
+    def gene2model_aco(self, dic_path):
+        model = tf.keras.models.clone_model(self.default_model)
+
+        # copy pretrained model
+        model.set_weights(self.original_weights)
+
+        for layer in self.default_model.layers:
+            # 重みがあればgeneを参照してtrainableを変更
+            #   新規学習レイヤーの場合は重みをロード
+            if layer.name in dic_path:
+                layer.trainable = bool(dic_path[layer.name])
+
+        model.compile(optimizer='adam', loss='mse', metrics=['mae'])
 
         return model
 

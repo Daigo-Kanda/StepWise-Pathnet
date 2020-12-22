@@ -10,6 +10,7 @@
             </list>
           </settings>
         </remote-mappings>
+        <remote-mappings server-id="python@sftp://kanda@192.168.11.34:9000/home/kanda/anaconda3/envs/tensorflow/bin/python" />
       </list>
     </list>
   </component>
