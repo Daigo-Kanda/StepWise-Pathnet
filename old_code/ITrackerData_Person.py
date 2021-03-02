@@ -11,7 +11,7 @@ from tensorflow.keras.utils import Sequence
 '''
 Data loader for the iTracker.
 Use prepareDataset.py to convert the dataset from http://gazecapture.csail.mit.edu/ to proper format.
-Author: Petr Kellnhofer ( pkel_lnho (at) gmai_l.com // remove underscores and spaces), 2018.
+Author: Petr Kellnhofer ( pkel_lnho (at) gmai_l.com // remove underscores and spaces), 2018. 
 Website: http://gazecapture.csail.mit.edu/
 Cite:
 Eye Tracking for Everyone
@@ -25,7 +25,10 @@ Booktitle = {IEEE Conference on Computer Vision and Pattern Recognition (CVPR)}
 }
 '''
 
-MEAN_PATH = './'
+###########################################################################################################
+# 古いコードなので後で消す
+###########################################################################################################
+MEAN_PATH = '../'
 
 
 def loadMetadata(filename, silent=False):
@@ -49,7 +52,7 @@ class ITrackerData(Sequence):
         self.gridSize = gridSize
 
         print('Loading iTracker dataset...')
-        metaFile = os.path.join(dataPath, 'metadata.mat')
+        metaFile = os.path.join(dataPath, 'metadata_person.mat')
         # metaFile = 'metadata.mat'
         if metaFile is None or not os.path.isfile(metaFile):
             raise RuntimeError(
@@ -60,11 +63,11 @@ class ITrackerData(Sequence):
                 'Could not read metadata file %s! Provide a valid dataset path.' % metaFile)
 
         self.faceMean = loadMetadata(os.path.join(
-            MEAN_PATH, 'mean_face_224.mat'))['image_mean']
+            MEAN_PATH, '../mean_face_224.mat'))['image_mean']
         self.eyeLeftMean = loadMetadata(os.path.join(
-            MEAN_PATH, 'mean_left_224.mat'))['image_mean']
+            MEAN_PATH, '../mean_left_224.mat'))['image_mean']
         self.eyeRightMean = loadMetadata(os.path.join(
-            MEAN_PATH, 'mean_right_224.mat'))['image_mean']
+            MEAN_PATH, '../mean_right_224.mat'))['image_mean']
 
         if split == 'test':
             mask = self.metadata['labelTest']
@@ -133,12 +136,10 @@ class ITrackerData(Sequence):
 
             metaIndex = self.indices[dummy]
 
-            imFacePath = os.path.join(self.dataPath, '%05d/appleFace/%05d.jpg' % (
-                self.metadata['labelRecNum'][metaIndex], self.metadata['frameIndex'][metaIndex]))
-            imEyeLPath = os.path.join(self.dataPath, '%05d/appleLeftEye/%05d.jpg' % (
-                self.metadata['labelRecNum'][metaIndex], self.metadata['frameIndex'][metaIndex]))
-            imEyeRPath = os.path.join(self.dataPath, '%05d/appleRightEye/%05d.jpg' % (
-                self.metadata['labelRecNum'][metaIndex], self.metadata['frameIndex'][metaIndex]))
+            imFacePath = os.path.join(self.dataPath, 'appleFace/%05d.jpg' % (self.metadata['frameIndex'][metaIndex]))
+            imEyeLPath = os.path.join(self.dataPath, 'appleLeftEye/%05d.jpg' % (self.metadata['frameIndex'][metaIndex]))
+            imEyeRPath = os.path.join(self.dataPath,
+                                      'appleRightEye/%05d.jpg' % (self.metadata['frameIndex'][metaIndex]))
 
             imFace = self.loadImage(imFacePath)
             imEyeL = self.loadImage(imEyeLPath)

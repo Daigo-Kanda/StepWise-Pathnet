@@ -14,7 +14,12 @@ def main(args):
     image_shape = (args.image_size, args.image_size, 3)
 
     if args.finetuning:
-        model = keras.models.load_model(args.trained_model)
+        original_model = keras.models.load_model(args.trained_model)
+        output = original_model(original_model.inputs, training=False)
+        model = keras.Model(original_model.inputs, output)
+        model.trainable = True
+        # compile
+        model.compile(optimizer=keras.optimizers.Adam(1e-4), loss='mse', metrics=['mae'])
         name = 'finetuning'
     else:
         # load model with random initial weights

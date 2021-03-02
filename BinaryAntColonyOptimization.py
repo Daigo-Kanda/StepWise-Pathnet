@@ -178,7 +178,7 @@ class BinaryAntColonyOptimization:
 
         for edges, acc in zip(li_edges, li_acc):
 
-            pheromone = 1 / acc
+            pheromone = 1 / (acc * acc)
 
             for edge in edges:
                 self.G.edges[edge]['weight'] += pheromone

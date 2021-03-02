@@ -27,13 +27,13 @@ if gpus:
 # hyper parameter
 # dataset_path = "/kanda_tmp/GazeCapture_pre"
 # kanda
-dataset_path = "/mnt/data/DataSet/GazeCapture_pre"
+# dataset_path = "/mnt/data/DataSet/GazeCapture_pre"
 # matsuura
-# dataset_path = "/home/kanda/GazeCapture_pre"
+dataset_path = "/home/kanda/GazeCapture_pre"
 model_path = "model/models.046-2.46558.hdf5"
-participants_num = 50
+participants_num = 30
 loop_num = 5
-batch_size = "256"
+batch_size = "64"
 image_size = "224"
 
 participants_path = glob.glob(os.path.join(dataset_path, "**"))
@@ -54,7 +54,7 @@ tmp = zip(participants_count, participants_path)
 sorted_tmp = sorted(tmp, reverse=True)
 participants_count, participants_path = zip(*sorted_tmp)
 
-for i in reversed(range(participants_num)):
+for i in range(participants_num):
     for j in range(loop_num):
         # parser = sw_pathnetmod_tournament_eye_tracker.get_parser()
         # sw_pathnetmod_tournament_eye_tracker.main(parser.parse_args(
@@ -67,5 +67,5 @@ for i in reversed(range(participants_num)):
         stochastic_transfer_eye_tracker.main(parser.parse_args(
             [participants_path[i], "./stochastic/{}".format(participants_path[i][-5:]), "--image_size",
              image_size, "--batch_size", batch_size,
-             "--epochs", "100", "--trained_model", model_path, "--transfer_all", "--do_original", '--n_geopath', '100'])
+             "--epochs", "30", "--trained_model", model_path, "--transfer_all", "--do_original", '--n_geopath', '100'])
         )

@@ -48,7 +48,7 @@ class sw_pathnet:
                 self.source_weights.append(self.tmp_model.layers[i_layer].get_weights())
 
                 # append target initialized weights
-                if is_reuse_initweight and i_layer != len(self.tmp_model.layers) - 1:
+                if is_reuse_initweight:
                     # 学習済みの重みを引っ張るだけ
                     self.target_weights.append(self.tmp_model.layers[i_layer].get_weights())
 
@@ -74,14 +74,15 @@ class sw_pathnet:
     # True : weighted
     # False : not weighted
     def is_weighted(self, layer):
-        print("{} : {}".format(layer.name, len(layer.weights)))
 
         # all layer
         if self.transfer_all_layer:
             weighted = (len(layer.weights) != 0)
         # only Conv2D and BatchNormalization
         else:
-            weighted = (len(layer.weights) != 0) or (len(layer.weights) != 4) or (len(layer.weights) != 3)
+            weighted = (len(layer.weights) != 0) and 'dense' not in layer.name
+
+        print("{} : {} : {}".format(layer.name, len(layer.weights), weighted))
 
         return weighted
 
@@ -190,6 +191,7 @@ class sw_pathnet:
             elif geopath[i_rand] == 0:
                 geopath[i_rand] = 1
             else:
+                .
                 sys.exit('invalid geopath value %s' % geopath)
 
         return geopath

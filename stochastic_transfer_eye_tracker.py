@@ -13,7 +13,6 @@ from tensorflow import keras
 from tensorflow.python.keras.callbacks import ModelCheckpoint
 
 import ITrackerData_person_tensor as data_gen
-import swpathnet_func_eyetracker
 from BinaryAntColonyOptimization import BinaryAntColonyOptimization
 
 
@@ -38,25 +37,31 @@ def myconverter(obj):
     elif isinstance(obj, datetime.datetime):
         return obj.__str__()
 
+
+def gene2model_aco(model, dic_path):
+    for layer in model.layers:
+        # 重みがあればgeneを参照してtrainableを変更
+        #   新規学習レイヤーの場合は重みをロード
+        if layer.name in dic_path:
+            layer.trainable = bool(dic_path[layer.name])
+
+
 def main(args):
-    tmp_model = keras.models.load_model(args.trained_model)
+    core_model = keras.models.load_model(args.trained_model)
 
-    # Step-wise pathnetインスタンスの作成
-    pathnet = swpathnet_func_eyetracker.sw_pathnet(tmp_model, args.n_comp, args.transfer_all,
-                                                   is_reuse_initweight=args.finetune)
+    weights = core_model.get_weights()
+
     # make baco instance
-    baco = BinaryAntColonyOptimization(tmp_model)
-
-    del tmp_model
+    baco = BinaryAntColonyOptimization(core_model)
 
     # algorithm cycle
-    cycle = 40
+    cycle = 20
     n_geopath = 20
 
     # generate data
-    data_train = data_gen.getData(batch_size=0, memory_size=150, dataset_path=args.dataset_dir)
-    train_generator = data_train[0].repeat().batch(args.batch_size)
-    validation_generator = data_train[1].repeat().batch(args.batch_size)
+    data = data_gen.getData(batch_size=args.batch_size, memory_size=150, dataset_path=args.dataset_dir)
+    train_generator = data[0]
+    validation_generator = data[1]
 
     # save best val_loss model
     best_val_loss = 1000
@@ -79,20 +84,25 @@ def main(args):
         # make path and that edge
         for j in range(n_geopath):
             tmp = baco.gen_path()
+            for k in tmp[0]:
+                if 'dense' in k:
+                    tmp[0][k] = 1
             li_path.append(tmp[0])
             li_edge.append(tmp[1])
 
-        start = time.time()
-
-        for k, (batch, batch_val) in enumerate(zip(train_generator, validation_generator)):
-
-            if k == n_geopath:
-                break
-
+        for k in range(n_geopath):
             get_model_time = time.time()
             # make model from path data (set freeze or not)
-            model = pathnet.gene2model_aco(li_path[k])
 
+            copy_model = keras.models.clone_model(core_model)
+            copy_model.set_weights(weights)
+
+            output = copy_model(copy_model.inputs, training=False)
+            model = keras.Model(copy_model.inputs, output)
+
+            gene2model_aco(copy_model, li_path[k])
+
+            model.compile(optimizer=keras.optimizers.Adam(1e-4), loss='mse', metrics=['mae'])
             # print(model.optimizer.get_weights())
 
             print('model prepare need {} seconds'.format(time.time() - get_model_time))
@@ -101,14 +111,11 @@ def main(args):
 
             # train just one epoch
             history = model.fit(
-                x=batch[0],
-                y=batch[1],
-                batch_size=args.batch_size,
+                x=train_generator,
                 initial_epoch=0,
                 epochs=1,
                 verbose=2,
-                validation_data=batch_val,
-                validation_batch_size=args.batch_size
+                validation_data=validation_generator,
             )
 
             print('fit time is {}'.format(time.time() - fit_time))
@@ -125,10 +132,10 @@ def main(args):
 
             tf.keras.backend.clear_session()
             # ガベコレ
-            del history, model, batch, batch_val
+            del history, model, copy_model, output
             gc.collect()
 
-        print('elapsed time is {}'.format(time.time() - start))
+        # print('elapsed time is {}'.format(time.time() - start))
 
         # 結果の集計
         tmp_loss = [history[0, 3] for history in histories]
@@ -163,12 +170,15 @@ def main(args):
 
     ####################################################################################################################
     # train best path
-    model = pathnet.gene2model_aco(best_path)
+    copy_model = keras.models.clone_model(core_model)
+    copy_model.set_weights(weights)
 
-    # generate data
-    data = data_gen.getData(batch_size=args.batch_size, memory_size=150, dataset_path=args.dataset_dir)
-    train_generator = data[0]
-    validation_generator = data[1]
+    output = copy_model(copy_model.inputs, training=False)
+    model = keras.Model(copy_model.inputs, output)
+
+    gene2model_aco(copy_model, best_path)
+
+    model.compile(optimizer=keras.optimizers.Adam(1e-4), loss='mse', metrics=['mae'])
 
     now = datetime.datetime.now()
     # callbacks
